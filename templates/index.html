@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi Cancer Classifier</title>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 30px 16px;
+}
+.wrapper { width: 100%; max-width: 740px; }
+
+/* Header */
+.header { text-align: center; margin-bottom: 28px; }
+.header h1 { font-size: 1.7rem; margin-bottom: 4px; }
+.header p  { color: #8b949e; font-size: 0.9rem; }
+
+/* Card */
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+/* Error */
+.error-box {
+  background: rgba(218,54,51,0.12);
+  border: 1px solid #da3633;
+  color: #f85149;
+  padding: 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* ── Upload Area ─────────────────────────────── */
+.drop-zone {
+  border: 2px dashed #30363d;
+  border-radius: 10px;
+  padding: 48px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.25s;
+}
+.drop-zone:hover,
+.drop-zone.dragover {
+  border-color: #58a6ff;
+  background: rgba(88,166,255,0.05);
+}
+.drop-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+.drop-zone p     { margin-bottom: 6px; }
+.drop-zone .sub  { color: #8b949e; font-size: 0.82rem; }
+
+/* Preview */
+.preview { text-align: center; margin-top: 14px; display: none; }
+.preview img {
+  max-width: 240px; max-height: 240px;
+  border-radius: 10px; border: 1px solid #30363d;
+}
+.preview .name { color: #8b949e; font-size: 0.78rem; margin-top: 6px; }
+.remove-btn {
+  background: #da3633; color: #fff; border: none;
+  padding: 4px 14px; border-radius: 6px;
+  cursor: pointer; margin-top: 8px; font-size: 0.78rem;
+}
+
+/* Submit */
+.submit-btn {
+  width: 100%; padding: 13px; margin-top: 18px;
+  background: #238636; color: #fff; border: none;
+  border-radius: 8px; font-size: 1rem; font-weight: 600;
+  cursor: pointer; transition: 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.submit-btn:hover { background: #2ea043; }
+.submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.spinner {
+  display: none; width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Result Styles ───────────────────────────── */
+.result-image { text-align: center; margin-bottom: 18px; }
+.result-image img {
+  max-width: 280px; max-height: 280px;
+  border-radius: 10px; border: 2px solid #30363d;
+}
+.result-image .fname { color: #484f58; font-size: 0.75rem; margin-top: 6px; }
+
+/* Diagnosis banner */
+.diagnosis {
+  text-align: center; padding: 16px;
+  border-radius: 10px; margin-bottom: 22px;
+}
+.diagnosis h2 { font-size: 1.2rem; margin-bottom: 4px; }
+.diagnosis p  { font-size: 0.88rem; }
+
+.diag-primary {
+  background: rgba(88,166,255,0.1);
+  border: 1px solid #58a6ff; color: #79c0ff;
+}
+.diag-warning {
+  background: rgba(210,153,34,0.1);
+  border: 1px solid #d29922; color: #e3b341;
+  font-size: 0.82rem; padding: 10px;
+  border-radius: 8px; text-align: center;
+  margin-bottom: 18px;
+}
+
+/* Section titles */
+.section-title {
+  font-size: 1rem; font-weight: 600;
+  margin-bottom: 10px; color: #c9d1d9;
+}
+
+/* Badge */
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-radius: 6px;
+  font-weight: 700; margin-bottom: 12px; font-size: 0.95rem;
+}
+.badge-blue   { background: rgba(88,166,255,0.15); color: #58a6ff; }
+.badge-orange { background: rgba(210,153,34,0.15); color: #d29922; }
+
+/* Probability bars */
+.prob-row {
+  display: flex; align-items: center;
+  margin-bottom: 6px; gap: 8px;
+}
+.prob-label {
+  width: 240px; text-align: right;
+  font-size: 0.78rem; color: #8b949e; flex-shrink: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prob-track {
+  flex: 1; height: 8px; background: #21262d;
+  border-radius: 4px; overflow: hidden;
+}
+.prob-fill {
+  height: 100%; border-radius: 4px;
+  background: #484f58; transition: width 0.6s ease;
+}
+.prob-fill.active { background: #58a6ff; }
+.prob-val { width: 50px; font-size: 0.78rem; color: #8b949e; }
+
+/* Level sections */
+.level-section { margin-bottom: 22px; }
+
+/* Toggle button */
+.toggle-btn {
+  background: #21262d; color: #58a6ff;
+  border: 1px solid #30363d; padding: 6px 16px;
+  border-radius: 6px; cursor: pointer;
+  font-size: 0.82rem; margin-top: 8px;
+  transition: 0.2s;
+}
+.toggle-btn:hover { background: #30363d; }
+.hidden-bars { display: none; }
+
+/* Back button */
+.back-btn {
+  display: block; text-align: center; width: 100%;
+  padding: 12px; background: #21262d; color: #58a6ff;
+  border: 1px solid #30363d; border-radius: 8px;
+  text-decoration: none; font-weight: 600; transition: 0.2s;
+}
+.back-btn:hover { background: #30363d; }
+
+/* Steps info */
+.steps p {
+  color: #8b949e; font-size: 0.88rem; line-height: 1.8;
+}
+
+/* Footer */
+.footer {
+  text-align: center; color: #484f58;
+  font-size: 0.76rem; margin-top: 20px;
+}
+
+/* Cancer type colors */
+.cancer-tag {
+  display: inline-block; padding: 3px 10px;
+  border-radius: 4px; font-size: 0.75rem;
+  font-weight: 600; margin-left: 6px;
+}
+.tag-all       { background: #1f3a5f; color: #58a6ff; }
+.tag-brain     { background: #3b1f5f; color: #bc8cff; }
+.tag-breast    { background: #5f1f4a; color: #f778ba; }
+.tag-cervical  { background: #5f3b1f; color: #f0b232; }
+.tag-kidney    { background: #1f5f3b; color: #56d364; }
+.tag-lung      { background: #5f1f1f; color: #f85149; }
+.tag-lymphoma  { background: #1f5f5f; color: #39d2c0; }
+.tag-oral      { background: #4a4a1f; color: #cca700; }
+
+@media (max-width: 520px) {
+  .prob-label { width: 100px; font-size: 0.68rem; }
+  .card { padding: 16px; }
+}
+</style>
+</head>
+
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <h1>🔬 Multi Cancer Classifier</h1>
+    <p>Hierarchical MobileNetV3 — 8 Cancer Types · 26 Subclasses</p>
+  </div>
+
+  <!-- Error -->
+  {% if error %}
+  <div class="error-box">❌ {{ error }}</div>
+  {% endif %}
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--                   RESULT VIEW                       -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  {% if result %}
+  <div class="card">
+
+    <!-- Uploaded Image -->
+    <div class="result-image">
+      <img src="{{ image_url }}" alt="uploaded" />
+      <div class="fname">Uploaded image</div>
+    </div>
+
+    <!-- Diagnosis -->
+    <div class="diagnosis diag-primary">
+      <h2>{{ result.level1_label }}</h2>
+      <p>{{ result.level2_label }} — {{ result.level2_confidence }}% confidence</p>
+    </div>
+
+    <!-- Consistency warning -->
+    {% if not result.consistent %}
+    <div class="diag-warning">
+      ⚠️ Note: Sub-type prediction ({{ result.level2_parent }}) differs from
+      cancer type prediction ({{ result.level1_label }}). Results may need review.
+    </div>
+    {% endif %}
+
+    <!-- Level-1: Cancer Type -->
+    <div class="level-section">
+      <div class="section-title">🔹 Level 1 — Cancer Type (8 classes)</div>
+      <div class="badge badge-blue">
+        {{ result.level1_label }} — {{ result.level1_confidence }}%
+      </div>
+
+      {% for cls, prob in result.level1_probs.items() %}
+      <div class="prob-row">
+        <span class="prob-label">{{ cls }}</span>
+        <div class="prob-track">
+          <div class="prob-fill {{ 'active' if cls == result.level1_label else '' }}"
+               style="width: {{ prob }}%"></div>
+        </div>
+        <span class="prob-val">{{ prob }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Level-2: Subclass -->
+    <div class="level-section">
+      <div class="section-title">🔸 Level 2 — Subclass (26 classes)</div>
+      <div class="badge badge-orange">
+        {{ result.level2_label }} — {{ result.level2_confidence }}%
+      </div>
+
+      <!-- Top 5 always visible -->
+      {% set ns = namespace(count=0) %}
+      {% for cls, prob in result.level2_probs.items() %}
+        {% if ns.count < 5 %}
+        <div class="prob-row">
+          <span class="prob-label">{{ cls }}</span>
+          <div class="prob-track">
+            <div class="prob-fill {{ 'active' if cls == result.level2_label else '' }}"
+                 style="width: {{ prob }}%"></div>
+          </div>
+          <span class="prob-val">{{ prob }}%</span>
+        </div>
+        {% set ns.count = ns.count + 1 %}
+        {% endif %}
+      {% endfor %}
+
+      <!-- Remaining bars (hidden by default) -->
+      <div class="hidden-bars" id="allBars">
+        {% set ns2 = namespace(count=0) %}
+        {% for cls, prob in result.level2_probs.items() %}
+          {% if ns2.count >= 5 %}
+          <div class="prob-row">
+            <span class="prob-label">{{ cls }}</span>
+            <div class="prob-track">
+              <div class="prob-fill {{ 'active' if cls == result.level2_label else '' }}"
+                   style="width: {{ prob }}%"></div>
+            </div>
+            <span class="prob-val">{{ prob }}%</span>
+          </div>
+          {% endif %}
+          {% set ns2.count = ns2.count + 1 %}
+        {% endfor %}
+      </div>
+
+      <button class="toggle-btn" id="toggleBtn" onclick="toggleBars()">
+        ▼ Show all 26 classes
+      </button>
+    </div>
+
+  </div>
+
+  <a href="/" class="back-btn">⬆️ Upload Another Image</a>
+
+  {% else %}
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--                   UPLOAD VIEW                       -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="card">
+    <form id="uploadForm" action="/predict" method="post" enctype="multipart/form-data">
+
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📁</div>
+        <p>Drag & drop your image here</p>
+        <div class="sub">or click to browse — JPG, PNG, BMP, TIFF</div>
+        <input type="file" name="file" id="fileInput" accept="image/*" required hidden />
+      </div>
+
+      <div class="preview" id="preview">
+        <img id="previewImg" src="" alt="preview" />
+        <div class="name" id="fileName"></div>
+        <button type="button" class="remove-btn" id="removeBtn">✕ Remove</button>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submitBtn" disabled>
+        <span id="btnText">🧬 Classify Image</span>
+        <div class="spinner" id="spinner"></div>
+      </button>
+
+    </form>
+  </div>
+
+  <!-- How it works -->
+  <div class="card">
+    <div class="section-title">How it works</div>
+    <div class="steps">
+      <p>
+        <strong>1.</strong> Upload a medical / histopathology image.<br>
+        <strong>2.</strong> <strong>Level-1</strong> identifies the cancer type
+        (8 types: ALL, Brain, Breast, Cervical, Kidney, Lung & Colon, Lymphoma, Oral).<br>
+        <strong>3.</strong> <strong>Level-2</strong> pinpoints the specific subclass (26 subclasses).<br>
+      </p>
+    </div>
+  </div>
+
+  <!-- Dataset info -->
+  <div class="card">
+    <div class="section-title">Supported Cancer Types</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+      <span class="cancer-tag tag-all">ALL (4 sub)</span>
+      <span class="cancer-tag tag-brain">Brain (3 sub)</span>
+      <span class="cancer-tag tag-breast">Breast (2 sub)</span>
+      <span class="cancer-tag tag-cervical">Cervical (5 sub)</span>
+      <span class="cancer-tag tag-kidney">Kidney (2 sub)</span>
+      <span class="cancer-tag tag-lung">Lung & Colon (5 sub)</span>
+      <span class="cancer-tag tag-lymphoma">Lymphoma (3 sub)</span>
+      <span class="cancer-tag tag-oral">Oral (2 sub)</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    ⚠️ Research / educational use only. Always consult a medical professional.<br>
+    Dataset: Obuli Sai Naren (2022) — Multi Cancer Dataset · Kaggle
+  </div>
+
+</div>
+
+<!-- ── JavaScript ──────────────────────────────────────── -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const dropZone  = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+  const preview   = document.getElementById("preview");
+  const previewImg= document.getElementById("previewImg");
+  const fileName  = document.getElementById("fileName");
+  const removeBtn = document.getElementById("removeBtn");
+  const submitBtn = document.getElementById("submitBtn");
+  const btnText   = document.getElementById("btnText");
+  const spinner   = document.getElementById("spinner");
+  const form      = document.getElementById("uploadForm");
+
+  if (!dropZone) return;
+
+  dropZone.addEventListener("click", () => fileInput.click());
+
+  ["dragenter","dragover"].forEach(e =>
+    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add("dragover"); })
+  );
+  ["dragleave","drop"].forEach(e =>
+    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove("dragover"); })
+  );
+  dropZone.addEventListener("drop", e => {
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      showPreview(e.dataTransfer.files[0]);
+    }
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length) showPreview(fileInput.files[0]);
+  });
+
+  function showPreview(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.src = e.target.result;
+      fileName.textContent = file.name;
+      preview.style.display = "block";
+      dropZone.style.display = "none";
+      submitBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  removeBtn.addEventListener("click", () => {
+    fileInput.value = "";
+    preview.style.display = "none";
+    dropZone.style.display = "block";
+    submitBtn.disabled = true;
+  });
+
+  form.addEventListener("submit", () => {
+    btnText.textContent = "Classifying...";
+    spinner.style.display = "inline-block";
+    submitBtn.disabled = true;
+  });
+});
+
+// Toggle all level-2 bars
+function toggleBars() {
+  const bars = document.getElementById("allBars");
+  const btn  = document.getElementById("toggleBtn");
+  if (bars.style.display === "none" || bars.style.display === "") {
+    bars.style.display = "block";
+    btn.textContent = "▲ Show top 5 only";
+  } else {
+    bars.style.display = "none";
+    btn.textContent = "▼ Show all 26 classes";
+  }
+}
+</script>
+
+</body>
+</html>
