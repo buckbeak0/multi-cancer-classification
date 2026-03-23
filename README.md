@@ -17,7 +17,6 @@
 - To start the server / run this project
 - Use command ```uvicorn main:app --reload```
 - A link would pop in the output click on it
-### Enjoy
 
 ## Precautions
 - Before starting always make sure venv is activated
@@ -26,5 +25,4 @@
 
 
 ### Note - We can change the model in main.py line 19 by just changing the model file name
-# multi-cancer-classification
-# multi-cancer-classification
+
