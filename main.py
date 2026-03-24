@@ -18,7 +18,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# ── 1. Cancer Types & Class Mappings ──────────────────────────────────
 LEVEL1_CLASSES = [
     "Acute Lymphoblastic Leukemia",
     "Brain Cancer",
@@ -70,7 +69,6 @@ SUBCLASS_TO_CANCER = {
     24: 7, 25: 7,
 }
 
-# ── 2. FastAPI Setup ───────────────────────────────────────────────────
 app = FastAPI()
 
 UPLOAD_DIR = Path("uploads")
@@ -82,7 +80,6 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 IMAGE_SIZE = 224
 
 
-# ── 3. Model Building & Loading ────────────────────────────────────────
 def build_model(num_level1=8, num_level2=26):
     base = MobileNetV3Large(
         input_shape=(224, 224, 3),
@@ -134,20 +131,17 @@ def load_model(weights_path="models/final_model1.keras"):
 
     return fallback_model
 
-# Load model once at startup
 print("Loading model...")
 model = load_model()
 print("Model ready.\n")
 
 
-# ── 4. Image Processing & Prediction ───────────────────────────────────
 def preprocess_image(image: Image.Image) -> np.ndarray:
     img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
     img_array = np.array(img, dtype=np.float32)
     img_array = np.expand_dims(img_array, axis=0)
     
     
-    # ✅ Add this line instead:
     img_array = img_array / 255.0 
     
     return img_array
@@ -155,11 +149,9 @@ def preprocess_image(image: Image.Image) -> np.ndarray:
 def predict(image: Image.Image):
     img_array = preprocess_image(image)
 
-    # Console Output for TF processing
     print("\n--- TENSORFLOW PROCESSING ---")
     preds = model.predict(img_array, verbose=1)
     
-    # Extract arrays
     if isinstance(preds, dict):
         l1_probs = preds["cancer_type"][0]
         l2_probs = preds["subclass"][0]
@@ -169,7 +161,6 @@ def predict(image: Image.Image):
         else:
             l1_probs, l2_probs = preds[1][0], preds[0][0]
 
-    # Level-1 result processing
     l1_idx = int(np.argmax(l1_probs))
     l1_label = LEVEL1_CLASSES[l1_idx]
     l1_conf = round(float(l1_probs[l1_idx]) * 100, 2)
@@ -179,7 +170,6 @@ def predict(image: Image.Image):
         for cls, p in zip(LEVEL1_CLASSES, l1_probs)
     }
 
-    # Level-2 result processing
     l2_idx = int(np.argmax(l2_probs))
     l2_label = LEVEL2_DISPLAY[l2_idx]
     l2_conf = round(float(l2_probs[l2_idx]) * 100, 2)
@@ -223,7 +213,6 @@ def predict(image: Image.Image):
     }
 
 
-# ── 5. API Routes ──────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse(
@@ -283,7 +272,6 @@ async def predict_api(file: UploadFile = File(...)):
     return result
 
 
-# ── 6. Run Application ─────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
