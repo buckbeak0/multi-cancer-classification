@@ -1,12 +1,6 @@
 import os
 
-# ── FORWARD INSTRUCTIONS TO TENSORFLOW ─────────────────────────────────
-# 1. Force TensorFlow to use ONLY the CPU (disables GPU)
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-# 2. Fix potential weight loading issues between TF 2.15 and TF 2.16+
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-# ───────────────────────────────────────────────────────────────────────
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import uuid
 import shutil
@@ -99,29 +93,25 @@ def build_model(num_level1=8, num_level2=26):
     x = base.output
     x = layers.GlobalAveragePooling2D()(x)
 
-    # Shared dense block
     shared = layers.Dense(1280)(x)
     shared = layers.BatchNormalization()(shared)
     shared = layers.ReLU()(shared)
     shared = layers.Dropout(0.3)(shared)
 
-    # Level-1 head → Cancer Type
     l1 = layers.Dense(256, activation="relu")(shared)
     l1 = layers.Dropout(0.2)(l1)
-    level1_out = layers.Dense(num_level1, activation="softmax", name="level1")(l1)
+    level1_out = layers.Dense(num_level1, activation="softmax", name="cancer_type")(l1)
 
-    # Level-2 head → Subclass
     l2 = layers.Dense(512, activation="relu")(shared)
     l2 = layers.Dropout(0.2)(l2)
     l2 = layers.Dense(256, activation="relu")(l2)
     l2 = layers.Dropout(0.2)(l2)
-    level2_out = layers.Dense(num_level2, activation="softmax", name="level2")(l2)
+    level2_out = layers.Dense(num_level2, activation="softmax", name="subclass")(l2)
 
     model = Model(inputs=base.input, outputs=[level1_out, level2_out])
     return model
 
 def load_model(weights_path="models/final_model1.keras"):
-    # First, try to load the entire model directly to avoid architecture mismatch
     if os.path.exists(weights_path):
         try:
             loaded_model = tf.keras.models.load_model(weights_path)
@@ -131,7 +121,6 @@ def load_model(weights_path="models/final_model1.keras"):
             print(f"⚠️ Could not load full model: {e}")
             print("   Attempting to build model and load weights manually...")
             
-    # Fallback to manual build
     fallback_model = build_model()
     if os.path.exists(weights_path):
         try:
@@ -156,30 +145,31 @@ def preprocess_image(image: Image.Image) -> np.ndarray:
     img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
     img_array = np.array(img, dtype=np.float32)
     img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)
+    
+    
+    # ✅ Add this line instead:
+    img_array = img_array / 255.0 
+    
     return img_array
 
 def predict(image: Image.Image):
     img_array = preprocess_image(image)
 
-    # model.predict might return a dict (Keras 3) or list depending on how it was saved
-    preds = model.predict(img_array, verbose=0)
+    # Console Output for TF processing
+    print("\n--- TENSORFLOW PROCESSING ---")
+    preds = model.predict(img_array, verbose=1)
     
-    # Safely extract the raw arrays
+    # Extract arrays
     if isinstance(preds, dict):
-        preds_list = list(preds.values())
+        l1_probs = preds["cancer_type"][0]
+        l2_probs = preds["subclass"][0]
     else:
-        preds_list = preds
-        
-    # Dynamically assign Level 1 and Level 2 based on the number of classes (8 vs 26)
-    if preds_list[0].shape[-1] == len(LEVEL1_CLASSES):
-        l1_probs = preds_list[0][0]
-        l2_probs = preds_list[1][0]
-    else:
-        l1_probs = preds_list[1][0]
-        l2_probs = preds_list[0][0]
+        if preds[0].shape[-1] == len(LEVEL1_CLASSES):
+            l1_probs, l2_probs = preds[0][0], preds[1][0]
+        else:
+            l1_probs, l2_probs = preds[1][0], preds[0][0]
 
-    # Level-1 result
+    # Level-1 result processing
     l1_idx = int(np.argmax(l1_probs))
     l1_label = LEVEL1_CLASSES[l1_idx]
     l1_conf = round(float(l1_probs[l1_idx]) * 100, 2)
@@ -189,34 +179,37 @@ def predict(image: Image.Image):
         for cls, p in zip(LEVEL1_CLASSES, l1_probs)
     }
 
-    # Level-2 result
+    # Level-2 result processing
     l2_idx = int(np.argmax(l2_probs))
     l2_label = LEVEL2_DISPLAY[l2_idx]
     l2_conf = round(float(l2_probs[l2_idx]) * 100, 2)
 
-    # All level-2 probs sorted by confidence (descending)
     l2_all_unsorted = {
         LEVEL2_DISPLAY[i]: round(float(l2_probs[i]) * 100, 2)
         for i in range(len(LEVEL2_DISPLAY))
     }
     l2_all = dict(sorted(l2_all_unsorted.items(), key=lambda x: x[1], reverse=True))
 
-    # Check if level-2 prediction is consistent with level-1
+    # Consistency check
     l2_parent = LEVEL1_CLASSES[int(SUBCLASS_TO_CANCER[l2_idx])]
     consistent = (l2_parent == l1_label)
 
-    # Console Output
-    print("\n" + "="*45)
-    print("              PREDICTION RESULTS             ")
-    print("="*45)
-    print(f"🔹 Level-1 (Cancer Type): {l1_label}")
-    print(f"   Confidence:            {l1_conf:.2f}%\n")
-    print(f"🔹 Level-2 (Subclass)   : {l2_label}")
-    print(f"   Confidence:            {l2_conf:.2f}%")
+    # ── CONCISE CONSOLE OUTPUT ──
+    print("\n" + "═"*60)
+    print(" 🧠 TENSORFLOW PREDICTION RESULTS 🧠 ")
+    print("═"*60)
+
+    print("\n[ LEVEL-1: CANCER TYPE ]")
+    print(f"✅ PREDICTED CLASS : {l1_label}")
+    print(f"🎯 CONFIDENCE      : {float(l1_probs[l1_idx]) * 100:.5f}%")
+    
+    print("\n[ LEVEL-2: SUBCLASS ]")
+    print(f"✅ PREDICTED CLASS : {l2_label}")
+    print(f"🎯 CONFIDENCE      : {l2_conf:.2f}%")
     
     if not consistent:
-         print("\n⚠️ Note: The Level-2 subclass does not map to the predicted Level-1 type.")
-    print("="*45 + "\n")
+         print("\n⚠️  WARNING: The Level-2 subclass does not logically map to the predicted Level-1 type.")
+    print("\n" + "═"*60 + "\n")
 
     return {
         "level1_label": l1_label,
@@ -241,7 +234,6 @@ async def home(request: Request):
 
 @app.post("/predict", response_class=HTMLResponse)
 async def predict_route(request: Request, file: UploadFile = File(...)):
-    # Validate file type
     ext = Path(file.filename).suffix.lower()
     allowed = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
     if ext not in allowed:
@@ -251,13 +243,11 @@ async def predict_route(request: Request, file: UploadFile = File(...)):
             context={"request": request, "error": f"Unsupported file type: {ext}"}
         )
 
-    # Save uploaded image
     filename = f"{uuid.uuid4().hex}{ext}"
     save_path = UPLOAD_DIR / filename
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # Run prediction
     try:
         image = Image.open(save_path)
         result = predict(image)
@@ -268,7 +258,6 @@ async def predict_route(request: Request, file: UploadFile = File(...)):
             context={"request": request, "error": f"Error processing image: {str(e)}"}
         )
 
-    # Return successful prediction
     return templates.TemplateResponse(
         request=request, 
         name="index.html", 
@@ -297,6 +286,4 @@ async def predict_api(file: UploadFile = File(...)):
 # ── 6. Run Application ─────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-    # Optional print to confirm TF configuration
-    print("Available devices:", tf.config.list_physical_devices())
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
