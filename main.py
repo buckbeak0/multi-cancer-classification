@@ -196,7 +196,7 @@ def predict(image: Image.Image):
 
     # ── CONCISE CONSOLE OUTPUT ──
     print("\n" + "═"*60)
-    print(" 🧠 TENSORFLOW PREDICTION RESULTS 🧠 ")
+    print(" 🧠 TENSORFLOW PREDICTION RESULTS")
     print("═"*60)
 
     print("\n[ LEVEL-1: CANCER TYPE ]")
@@ -208,7 +208,7 @@ def predict(image: Image.Image):
     print(f"🎯 CONFIDENCE      : {l2_conf:.2f}%")
     
     if not consistent:
-         print("\n⚠️  WARNING: The Level-2 subclass does not logically map to the predicted Level-1 type.")
+         print("\nWARNING: The Level-2 subclass does not logically map to the predicted Level-1 type.")
     print("\n" + "═"*60 + "\n")
 
     return {
