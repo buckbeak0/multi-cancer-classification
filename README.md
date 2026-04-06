@@ -24,5 +24,9 @@
 - Close the server using Ctrl + c after usage
 
 
-### Note - We can change the model in main.py line 19 by just changing the model file name
+## Changes-
+- main.py and index.html scripts are changes to work with 2 model mobilenetv3large and resnet50
+- You can find the model in the link
+link```https://www.kaggle.com/models/purebloods/sem4-project/?select=final_model1.keras```
+- Download the model files and place the .keras files in the models directory and enjoy
 
