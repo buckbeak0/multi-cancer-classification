@@ -66,17 +66,18 @@ loaded_models = {
 
 # ================= PREDICT =================
 def predict(image, model_choice):
-
     model = loaded_models[model_choice]
 
     img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
     img = np.array(img, dtype=np.float32)
     img = np.expand_dims(img, axis=0)
 
-    # Standard Caffe-style scaling (BGR, mean subtraction) which is what Keras ResNet50 expects.
+    # --- MODEL-SPECIFIC PREPROCESSING ---
     if model_choice == "mobilenet":
-        img = preprocess_mobilenet(img)
+        # TRADITIONAL RESCALING: Scale pixels to [0, 1]
+        img = img / 255.0
     else:
+        # RESNET: Keep the working BGR/Mean-Subtraction logic
         img = preprocess_resnet(img)
 
     preds = model.predict(img, verbose=0)
@@ -93,18 +94,14 @@ def predict(image, model_choice):
     l2_idx = int(np.argmax(l2_probs))
     
     # ================= CONSOLE DIAGNOSTICS =================
-    level1_label = LEVEL1_CLASSES[l1_idx]
-    level2_label = LEVEL2_DISPLAY[l2_idx]
-    
     print("\n" + "="*55)
-    print(f"🔍 TF PREDICTION RESULTS | MODEL: {model_choice.upper()}")
+    print(f"🔍 TF PREDICTION | MODEL: {model_choice.upper()}")
     print("-" * 55)
-    print(f"➔ Predicted L1 Class  : {level1_label}")
-    print(f"➔ Raw Confidence (L1) : {l1_probs[l1_idx]:.15f}")
-    print(f"➔ Predicted Subtype   : {level2_label}")
-    print(f"➔ Raw Confidence (L2) : {l2_probs[l2_idx]:.8f}")
+    print(f"➔ Predicted L1       : {LEVEL1_CLASSES[l1_idx]}")
+    print(f"➔ L1 Raw Confidence  : {l1_probs[l1_idx]:.8f}")
+    print(f"➔ Predicted Subtype  : {LEVEL2_DISPLAY[l2_idx]}")
+    print(f"➔ Pixel Range Used   : {np.min(img):.4f} to {np.max(img):.4f}")
     print("="*55 + "\n")
-    # =======================================================
 
     l1_all = [(cls, float(p)*100) for cls, p in zip(LEVEL1_CLASSES, l1_probs)]
     l2_all = [(LEVEL2_DISPLAY[i], float(l2_probs[i])*100) for i in range(len(LEVEL2_DISPLAY))]
@@ -113,67 +110,36 @@ def predict(image, model_choice):
     l2_all.sort(key=lambda x: x[1], reverse=True)
 
     return {
-        "level1_label": level1_label,
+        "level1_label": LEVEL1_CLASSES[l1_idx],
         "level1_confidence": round(float(l1_probs[l1_idx])*100, 2),
         "level1_probs": l1_all,
-
-        "level2_label": level2_label,
+        "level2_label": LEVEL2_DISPLAY[l2_idx],
         "level2_confidence": round(float(l2_probs[l2_idx])*100, 2),
         "level2_probs": l2_all,
-
         "level2_parent": LEVEL1_CLASSES[SUBCLASS_TO_CANCER[l2_idx]],
-        "consistent": (level1_label == LEVEL1_CLASSES[SUBCLASS_TO_CANCER[l2_idx]]),
+        "consistent": (LEVEL1_CLASSES[l1_idx] == LEVEL1_CLASSES[SUBCLASS_TO_CANCER[l2_idx]]),
         "model_used": model_choice
     }
 
 # ================= ROUTES =================
 @app.get("/")
 async def home(request: Request):
-    return templates.TemplateResponse(
-        request=request, 
-        name="index.html",
-        context={"request": request}
-    )
+    return templates.TemplateResponse(request=request, name="index.html", context={"request": request})
 
 @app.post("/predict", response_class=HTMLResponse)
-async def predict_route(
-    request: Request,
-    file: UploadFile = File(...),
-    model_choice: str = Form(...)
-):
+async def predict_route(request: Request, file: UploadFile = File(...), model_choice: str = Form(...)):
     try:
         model_choice = model_choice.lower().strip()
-
         filename = f"{uuid.uuid4().hex}.jpg"
         path = UPLOAD_DIR / filename
-
         with open(path, "wb") as f:
             shutil.copyfileobj(file.file, f)
-
         image = Image.open(path)
         result = predict(image, model_choice)
-
-        return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={
-                "request": request,
-                "result": result,
-                "image_url": f"/uploads/{filename}"
-            }
-        )
-
+        return templates.TemplateResponse(request=request, name="index.html", context={"request": request, "result": result, "image_url": f"/uploads/{filename}"})
     except Exception as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={
-                "request": request,
-                "error": str(e)
-            }
-        )
+        return templates.TemplateResponse(request=request, name="index.html", context={"request": request, "error": str(e)})
 
-# ================= RUN =================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
